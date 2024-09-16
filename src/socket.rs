@@ -161,7 +161,7 @@ impl TcpStream {
         socket.register_recv_waker(cx.waker());
         Poll::Pending
     }
-    pub async fn accept2(&mut self) -> io::Result<()> {
+    pub(super) async fn accept2(&mut self) -> io::Result<()> {
         poll_fn(|cx| self.poll_accept2(cx)).await
     }
 
