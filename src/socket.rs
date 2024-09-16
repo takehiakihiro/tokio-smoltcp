@@ -51,7 +51,7 @@ impl TcpListener {
     ) -> Poll<io::Result<(TcpStream, SocketAddr)>> {
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
 
-        if socket.state() == tcp::State::Established {
+        if socket.state() == tcp::State::SynReceived {
             drop(socket);
             return Poll::Ready(Ok(TcpStream::accept(self)?));
         }
@@ -149,6 +149,20 @@ impl TcpStream {
             },
             peer_addr,
         ))
+    }
+
+    pub fn poll_accept2(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
+
+        if socket.state() == tcp::State::Established {
+            drop(socket);
+            return Poll::Ready(Ok(()));
+        }
+        socket.register_recv_waker(cx.waker());
+        Poll::Pending
+    }
+    pub async fn accept2(&mut self) -> io::Result<()> {
+        poll_fn(|cx| self.poll_accept2(cx)).await
     }
 
     pub fn local_addr(&self) -> io::Result<SocketAddr> {
