@@ -1,6 +1,6 @@
 [package]
 name = "tokio-smoltcp"
-version = "0.4.4"
+version = "0.4.5"
 authors = ["spacemeowx2 <spacemeowx2@gmail.com>"]
 edition = "2018"
 description = "An asynchronous wrapper for smoltcp."
@@ -47,3 +47,7 @@ raw_socket = ["smoltcp/socket-raw"]
 
 [[example]]
 name = "pcap"
+
+[profile.dev]
+opt-level = 0  # Controls the --opt-level the compiler builds with
+debug = true   # Controls whether the compiler passes `-g`
