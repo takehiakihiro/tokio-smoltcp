@@ -209,6 +209,14 @@ impl AsyncRead for TcpStream {
     ) -> Poll<io::Result<()>> {
         log::trace!("TcpStream::poll_read");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
+
+        if socket.state() == tcp::State::SynReceived {
+            log::trace!(
+                "poll_read: socket status is tcp::State::SynReceived, return Poll::Pending"
+            );
+            return Poll::Pending;
+        }
+
         if !socket.may_recv() {
             log::trace!("poll_read: !socket.may_recv(), return Poll::Ready(Ok(()))");
             return Poll::Ready(Ok(()));
