@@ -100,6 +100,7 @@ pub struct TcpStream {
     reactor: Arc<Reactor>,
     local_addr: SocketAddr,
     peer_addr: SocketAddr,
+    waiting_ack_accepting: bool,
 }
 
 impl TcpStream {
@@ -122,6 +123,7 @@ impl TcpStream {
             reactor,
             local_addr,
             peer_addr,
+            waiting_ack_accepting: false,
         };
 
         tcp.reactor.notify();
@@ -152,6 +154,7 @@ impl TcpStream {
                 reactor: reactor.clone(),
                 local_addr,
                 peer_addr,
+                waiting_ack_accepting: true,
             },
             peer_addr,
         ))
@@ -162,6 +165,7 @@ impl TcpStream {
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
 
         if socket.state() == tcp::State::Established {
+            self.waiting_ack_accepting = false;
             drop(socket);
             log::trace!("poll_accept2: socket status is tcp::State::Established, return Poll::Ready(Ok(()))");
             return Poll::Ready(Ok(()));
@@ -219,7 +223,10 @@ impl AsyncRead for TcpStream {
         }
 
         if !socket.may_recv() {
-            log::trace!("poll_read: !socket.may_recv(), return Poll::Ready(Ok(()))");
+            log::trace!(
+                "poll_read: !socket.may_recv(), state is {}, return Poll::Ready(Ok(()))",
+                socket.state()
+            );
             return Poll::Ready(Ok(()));
         }
         if socket.can_recv() {
@@ -253,7 +260,7 @@ impl AsyncWrite for TcpStream {
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
         if !socket.may_send() {
             log::trace!(
-                "poll_write: !socket.may_send(), return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()))"
+                "poll_write: !socket.may_send(), state is {}, return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()))", socket.state()
             );
             return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()));
         }
@@ -277,7 +284,10 @@ impl AsyncWrite for TcpStream {
         log::trace!("TcpStream::poll_flush");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
         if socket.send_queue() == 0 {
-            log::trace!("poll_flush: socket.send_queue() == 0, return Poll::Ready(Ok(()))");
+            log::trace!(
+                "poll_flush: socket.send_queue() == 0, state is {}, return Poll::Ready(Ok(()))",
+                socket.state()
+            );
             return Poll::Ready(Ok(()));
         }
         socket.register_send_waker(cx.waker());
