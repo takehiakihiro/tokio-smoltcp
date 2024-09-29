@@ -68,10 +68,19 @@ async fn run(
                 .as_mut()
                 .reset(tokio::time::Instant::now() + deadline.into());
             select! {
-                _ = &mut timer => {},
-                _ = receive(&mut async_iface,&mut recv_buf) => {}
-                _ = notify.notified() => {}
-                _ = stopper.notified() => break,
+                _ = &mut timer => {
+                    log::trace!("Reactor's run: timer's timeout");
+                },
+                _ = receive(&mut async_iface,&mut recv_buf) => {
+                    log::trace!("Reactor's run: receive from async_iface");
+                }
+                _ = notify.notified() => {
+                    log::trace!("Reactor's run: notify notified");
+                }
+                _ = stopper.notified() => {
+                    log::trace!("Reactor's run: stopper notified");
+                    break;
+                }
             };
 
             while let (true, Some(Ok(p))) = (
@@ -86,11 +95,13 @@ async fn run(
 
         device.push_recv_queue(recv_buf.drain(..device.avaliable_recv_queue().min(recv_buf.len())));
 
+        log::trace!("Reactor's run: before iface.poll");
         iface.poll(
             Instant::now(),
             &mut device,
             &mut socket_allocator.sockets().lock(),
         );
+        log::trace!("Reactor's run: after  iface.poll");
     }
 
     Ok(())
