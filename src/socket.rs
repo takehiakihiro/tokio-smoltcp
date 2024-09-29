@@ -211,6 +211,7 @@ impl AsyncRead for TcpStream {
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
 
         if socket.state() == tcp::State::SynReceived {
+            socket.register_recv_waker(cx.waker());
             log::trace!(
                 "poll_read: socket status is tcp::State::SynReceived, return Poll::Pending"
             );
