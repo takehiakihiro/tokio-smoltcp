@@ -49,15 +49,19 @@ impl TcpListener {
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<io::Result<(TcpStream, SocketAddr)>> {
+        log::trace!("TcpListener::poll_accept");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
 
         if socket.state() == tcp::State::SynReceived {
             drop(socket);
-            log::trace!("poll_accept: socket status is tcp::State::SynReceived");
+            log::trace!("poll_accept: socket status is tcp::State::SynReceived, return Poll::Ready(Ok(TcpStream::accept()))");
             return Poll::Ready(Ok(TcpStream::accept(self)?));
         }
         socket.register_send_waker(cx.waker());
-        log::trace!("poll_accept: socket status is {}", socket.state());
+        log::trace!(
+            "poll_accept: socket status is {}, return Poll::Pending",
+            socket.state()
+        );
         Poll::Pending
     }
     pub async fn accept(&mut self) -> io::Result<(TcpStream, SocketAddr)> {
@@ -154,15 +158,19 @@ impl TcpStream {
     }
 
     pub fn poll_accept2(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        log::trace!("TcpStream::poll_accept2");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
 
         if socket.state() == tcp::State::Established {
             drop(socket);
-            log::trace!("poll_accept: socket status is tcp::State::Established");
+            log::trace!("poll_accept2: socket status is tcp::State::Established, return Poll::Ready(Ok(()))");
             return Poll::Ready(Ok(()));
         }
         socket.register_recv_waker(cx.waker());
-        log::trace!("poll_accept: socket status is {}", socket.state());
+        log::trace!(
+            "poll_accept2: socket status is {}, return Poll::Pending",
+            socket.state()
+        );
         Poll::Pending
     }
     pub async fn accept2(&mut self) -> io::Result<()> {
@@ -176,13 +184,19 @@ impl TcpStream {
         Ok(self.peer_addr)
     }
     pub fn poll_connected(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        log::trace!("TcpStream::poll_connected");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
         if socket.state() == tcp::State::Established {
-            log::trace!("poll_accept: socket status is tcp::State::Established");
+            log::trace!(
+                "poll_connected: socket status is tcp::State::Established, return Poll::Ready(Ok(()))"
+            );
             return Poll::Ready(Ok(()));
         }
         socket.register_send_waker(cx.waker());
-        log::trace!("poll_accept: socket status is {}", socket.state());
+        log::trace!(
+            "poll_connected: socket status is {}, return Poll::Pending",
+            socket.state()
+        );
         Poll::Pending
     }
 }
@@ -193,8 +207,10 @@ impl AsyncRead for TcpStream {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
+        log::trace!("TcpStream::poll_read");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
         if !socket.may_recv() {
+            log::trace!("poll_read: !socket.may_recv(), return Poll::Ready(Ok(()))");
             return Poll::Ready(Ok(()));
         }
         if socket.can_recv() {
@@ -203,9 +219,17 @@ impl AsyncRead for TcpStream {
                 .map_err(map_err)?;
             self.reactor.notify();
             buf.advance(read);
+            log::trace!(
+                "poll_read: socket.can_recv() n={}, return Poll::Ready(Ok(()))",
+                read
+            );
             return Poll::Ready(Ok(()));
         }
         socket.register_recv_waker(cx.waker());
+        log::trace!(
+            "poll_read: socket status is {}, return Poll::Pending",
+            socket.state()
+        );
         Poll::Pending
     }
 }
@@ -216,27 +240,46 @@ impl AsyncWrite for TcpStream {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
+        log::trace!("TcpStream::poll_write");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
         if !socket.may_send() {
+            log::trace!(
+                "poll_write: !socket.may_send(), return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()))"
+            );
             return Poll::Ready(Err(io::ErrorKind::BrokenPipe.into()));
         }
         if socket.can_send() {
             let r = socket.send_slice(buf).map_err(map_err)?;
             self.reactor.notify();
+            log::trace!(
+                "poll_write: socket.can_send() n={}, return Poll::Ready(Ok(r))",
+                r
+            );
             return Poll::Ready(Ok(r));
         }
         socket.register_send_waker(cx.waker());
+        log::trace!(
+            "poll_write: socket state is {}, return Poll::Pending",
+            socket.state()
+        );
         Poll::Pending
     }
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        log::trace!("TcpStream::poll_flush");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
         if socket.send_queue() == 0 {
+            log::trace!("poll_flush: socket.send_queue() == 0, return Poll::Ready(Ok(()))");
             return Poll::Ready(Ok(()));
         }
         socket.register_send_waker(cx.waker());
+        log::trace!(
+            "poll_flush: socket state is {}, return Poll::Pending",
+            socket.state()
+        );
         Poll::Pending
     }
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        log::trace!("TcpStream::poll_shutdown");
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
 
         if socket.is_open() {
@@ -244,10 +287,17 @@ impl AsyncWrite for TcpStream {
             self.reactor.notify();
         }
         if socket.state() == tcp::State::Closed {
+            log::trace!(
+                "poll_flush: socket state is tcp::State::Closed, return Poll::Ready(Ok(()))"
+            );
             return Poll::Ready(Ok(()));
         }
 
         socket.register_send_waker(cx.waker());
+        log::trace!(
+            "poll_shutdown: socket state is {}, return Poll::Pending",
+            socket.state()
+        );
         Poll::Pending
     }
 }
