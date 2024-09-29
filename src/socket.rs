@@ -53,9 +53,11 @@ impl TcpListener {
 
         if socket.state() == tcp::State::SynReceived {
             drop(socket);
+            log::trace!("poll_accept: socket status is tcp::State::SynReceived");
             return Poll::Ready(Ok(TcpStream::accept(self)?));
         }
         socket.register_send_waker(cx.waker());
+        log::trace!("poll_accept: socket status is {}", socket.state());
         Poll::Pending
     }
     pub async fn accept(&mut self) -> io::Result<(TcpStream, SocketAddr)> {
@@ -156,9 +158,11 @@ impl TcpStream {
 
         if socket.state() == tcp::State::Established {
             drop(socket);
+            log::trace!("poll_accept: socket status is tcp::State::Established");
             return Poll::Ready(Ok(()));
         }
         socket.register_recv_waker(cx.waker());
+        log::trace!("poll_accept: socket status is {}", socket.state());
         Poll::Pending
     }
     pub async fn accept2(&mut self) -> io::Result<()> {
@@ -174,9 +178,11 @@ impl TcpStream {
     pub fn poll_connected(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         let mut socket = self.reactor.get_socket::<tcp::Socket>(*self.handle);
         if socket.state() == tcp::State::Established {
+            log::trace!("poll_accept: socket status is tcp::State::Established");
             return Poll::Ready(Ok(()));
         }
         socket.register_send_waker(cx.waker());
+        log::trace!("poll_accept: socket status is {}", socket.state());
         Poll::Pending
     }
 }
