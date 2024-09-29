@@ -166,10 +166,18 @@ impl TcpStream {
 
         if socket.state() == tcp::State::Established {
             self.waiting_ack_accepting = false;
-            drop(socket);
             log::trace!("poll_accept2: socket status is tcp::State::Established, return Poll::Ready(Ok(()))");
             return Poll::Ready(Ok(()));
         }
+
+        if socket.state() != tcp::State::SynReceived {
+            self.waiting_ack_accepting = false;
+            log::trace!(
+                "poll_accept2: socket status is not SynReceived, return Poll::Ready(Err(io::ErrorKind::ConnectionRefused.into()))"
+            );
+            return Poll::Ready(Err(io::ErrorKind::ConnectionRefused.into()));
+        }
+
         socket.register_recv_waker(cx.waker());
         log::trace!(
             "poll_accept2: socket status is {}, return Poll::Pending",
